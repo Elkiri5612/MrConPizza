@@ -1,0 +1,310 @@
+#include "framework.h"
+#include "pizzatest.h"
+#include <stdlib.h>
+#include <time.h>
+#include <algorithm>
+
+#define MAX_LOADSTRING 100
+using namespace std;
+
+// 전역 변수:
+HINSTANCE hInst;                                // 현재 인스턴스입니다.
+WCHAR szTitle[MAX_LOADSTRING];                  // 제목 표시줄 텍스트입니다.
+WCHAR szWindowClass[MAX_LOADSTRING];            // 기본 창 클래스 이름입니다.
+COLORREF circleColor = RGB(0, 0, 0);            // 현재 원의 색상입니다.
+COLORREF randomColors[2];                       // 랜덤 색상 배열
+int colorOrder[2];                              // 색상 순서 배열
+int currentStep = 0;                            // 현재 클릭한 색상 순서
+
+// 버튼 색상 정의
+const COLORREF buttonColors[8] = {
+    RGB(255, 0, 0),     // 빨강
+    RGB(0, 255, 0),     // 초록
+    RGB(0, 0, 255),     // 파랑
+    RGB(255, 255, 0),   // 노랑
+    RGB(0, 255, 255),   // 하늘색
+    RGB(255, 0, 255),   // 보라색
+    RGB(255, 255, 255),   // 하얀색
+    RGB(255, 128, 0)    // 오렌지
+};
+
+
+
+// 이 코드 모듈에 포함된 함수의 선언을 전달합니다:
+ATOM                MyRegisterClass(HINSTANCE hInstance);
+BOOL                InitInstance(HINSTANCE, int);
+LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+
+void GenerateRandomColors();
+void CheckColorOrder(int colorIndex);
+
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_ LPWSTR    lpCmdLine,
+    _In_ int       nCmdShow)
+{
+    UNREFERENCED_PARAMETER(hPrevInstance);
+    UNREFERENCED_PARAMETER(lpCmdLine);
+
+    // 전역 문자열을 초기화합니다.
+    LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
+    LoadStringW(hInstance, IDC_PIZZATEST, szWindowClass, MAX_LOADSTRING);
+    MyRegisterClass(hInstance);
+
+    // 애플리케이션 초기화를 수행합니다:
+    if (!InitInstance(hInstance, nCmdShow))
+    {
+        return FALSE;
+    }
+
+    HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_PIZZATEST));
+
+    MSG msg;
+
+    // 기본 메시지 루프입니다:
+    while (GetMessage(&msg, nullptr, 0, 0))
+    {
+        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
+
+    return (int)msg.wParam;
+}
+
+//
+//  함수: MyRegisterClass()
+//
+//  용도: 창 클래스를 등록합니다.
+//
+ATOM MyRegisterClass(HINSTANCE hInstance)
+{
+    WNDCLASSEXW wcex;
+
+    wcex.cbSize = sizeof(WNDCLASSEX);
+
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
+    wcex.lpfnWndProc = WndProc;
+    wcex.cbClsExtra = 0;
+    wcex.cbWndExtra = 0;
+    wcex.hInstance = hInstance;
+    wcex.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_PIZZATEST));
+    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wcex.lpszMenuName = MAKEINTRESOURCEW(IDC_PIZZATEST);
+    wcex.lpszClassName = szWindowClass;
+    wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+
+    return RegisterClassExW(&wcex);
+}
+
+//
+//   함수: InitInstance(HINSTANCE, int)
+//
+//   용도: 인스턴스 핸들을 저장하고 주 창을 만듭니다.
+//
+BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
+{
+    hInst = hInstance; // 인스턴스 핸들을 전역 변수에 저장합니다.
+
+    HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT, 0, 800, 600, nullptr, nullptr, hInstance, nullptr);
+
+    if (!hWnd)
+    {
+        return FALSE;
+    }
+
+    const int buttonWidth = 100;
+    const int buttonHeight = 50;
+    const int columns = 4;
+    const int rows = 2;
+
+    // 버튼을 생성합니다.
+    for (int i = 0; i < columns; ++i)
+    {
+        for (int j = 0; j < rows; ++j)
+        {
+            int buttonIndex = i + j * columns; // 버튼 인덱스 계산
+
+            wchar_t buttonText[2] = { '1' + buttonIndex, '\0' };
+            int xPosition = 10 + (i * (buttonWidth + 10)); // 가로 위치 계산
+            int yPosition = 10 + (j * (buttonHeight + 10)); // 세로 위치 계산
+
+            CreateWindowW(L"BUTTON", buttonText, WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+                xPosition, yPosition, buttonWidth, buttonHeight, hWnd, (HMENU)(ID_BUTTON1 + buttonIndex), hInstance, nullptr);
+        }
+    }
+
+    // 랜덤 색상 생성
+    GenerateRandomColors();
+
+    ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
+
+    return TRUE;
+}
+
+void GenerateRandomColors()
+{
+    srand((unsigned int)time(NULL));
+    int indices[8] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    random_shuffle(begin(indices), end(indices));
+
+    for (int i = 0; i < 2; ++i)
+    {
+        randomColors[i] = buttonColors[indices[i]];
+        colorOrder[i] = indices[i]; // 색상 순서를 초기화합니다.
+    }
+}
+
+void CheckColorOrder(int colorIndex)
+{
+    if (colorOrder[currentStep] == colorIndex)
+    {
+        currentStep++;
+        if (currentStep == 2)
+        {
+            MessageBox(NULL, L"순서대로 눌렀습니다!", L"완료", MB_OK);
+            PostQuitMessage(0);
+        }
+    }
+    else
+    {
+        currentStep = 0; // 초기화
+    }
+}
+
+//
+//  함수: WndProc(HWND, UINT, WPARAM, LPARAM)
+//
+//  용도: 주 창의 메시지를 처리합니다.
+//
+LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    switch (message)
+    {
+    case WM_COMMAND:
+    {
+        int wmId = LOWORD(wParam);
+        // 메뉴 선택을 구문 분석합니다:
+        switch (wmId)
+        {
+        case IDM_ABOUT:
+            DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+            break;
+        case IDM_EXIT:
+            DestroyWindow(hWnd);
+            break;
+        case ID_BUTTON1:
+            circleColor = buttonColors[0];
+            InvalidateRect(hWnd, nullptr, TRUE);
+            CheckColorOrder(0);
+            break;
+        case ID_BUTTON2:
+            circleColor = buttonColors[1];
+            InvalidateRect(hWnd, nullptr, TRUE);
+            CheckColorOrder(1);
+            break;
+        case ID_BUTTON3:
+            circleColor = buttonColors[2];
+            InvalidateRect(hWnd, nullptr, TRUE);
+            CheckColorOrder(2);
+            break;
+        case ID_BUTTON4:
+            circleColor = buttonColors[3];
+            InvalidateRect(hWnd, nullptr, TRUE);
+            CheckColorOrder(3);
+            break;
+        case ID_BUTTON5:
+            circleColor = buttonColors[4];
+            InvalidateRect(hWnd, nullptr, TRUE);
+            CheckColorOrder(4);
+            break;
+        case ID_BUTTON6:
+            circleColor = buttonColors[5]; // 마젠타
+            InvalidateRect(hWnd, nullptr, TRUE);
+            CheckColorOrder(5);
+            break;
+        case ID_BUTTON7:
+            circleColor = buttonColors[6]; // 퍼플
+            InvalidateRect(hWnd, nullptr, TRUE);
+            CheckColorOrder(6);
+            break;
+        case ID_BUTTON8:
+            circleColor = buttonColors[7]; // 오렌지
+            InvalidateRect(hWnd, nullptr, TRUE);
+            CheckColorOrder(7);
+            break;
+        default:
+            return DefWindowProc(hWnd, message, wParam, lParam);
+        }
+    }
+    break;
+    case WM_PAINT:
+    {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+
+        // 중앙에 원을 그립니다.
+        RECT rect;
+        GetClientRect(hWnd, &rect);
+        int centerX = (rect.right - rect.left) / 2;
+        int centerY = (rect.bottom - rect.top) / 2;
+        int radius = 50;
+
+        HBRUSH hBrush = CreateSolidBrush(circleColor);
+        HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, hBrush);
+        Ellipse(hdc, centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+        SelectObject(hdc, oldBrush);
+        DeleteObject(hBrush);
+
+        // 오른쪽 위에 두 개의 랜덤 색상 원을 그립니다.
+        for (int i = 0; i < 2; ++i)
+        {
+            hBrush = CreateSolidBrush(randomColors[i]);
+            oldBrush = (HBRUSH)SelectObject(hdc, hBrush);
+
+            int randomRadius = 50;
+            int randomCenterX = rect.right - (randomRadius + 10);
+            int randomCenterY = 10 + (i * (randomRadius * 2 + 10));
+            Ellipse(hdc, randomCenterX - randomRadius, randomCenterY - randomRadius, randomCenterX + randomRadius, randomCenterY + randomRadius);
+
+            SelectObject(hdc, oldBrush);
+            DeleteObject(hBrush);
+        }
+
+        EndPaint(hWnd, &ps);
+    }
+    break;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        break;
+    default:
+        return DefWindowProc(hWnd, message, wParam, lParam);
+    }
+    return 0;
+}
+
+// 정보 대화 상자의 메시지 처리기입니다.
+INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    UNREFERENCED_PARAMETER(lParam);
+    switch (message)
+    {
+    case WM_INITDIALOG:
+        return (INT_PTR)TRUE;
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+        {
+            EndDialog(hDlg, LOWORD(wParam));
+            return (INT_PTR)TRUE;
+        }
+        break;
+    }
+    return (INT_PTR)FALSE;
+}
